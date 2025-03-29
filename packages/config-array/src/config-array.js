@@ -201,6 +201,10 @@ function assertValidBaseConfig(config, index) {
 
 	const validateConfig = {};
 
+	if ("basePath" in config) {
+		validateConfig.basePath = config.basePath;
+	}
+
 	if ("files" in config) {
 		validateConfig.files = config.files;
 	}
