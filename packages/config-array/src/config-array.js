@@ -283,16 +283,22 @@ function needsPatternNormalization(pattern) {
 /**
  * Normalizes `files` and `ignores` patterns in a config by removing "./" prefixes.
  * @param {Object} config The config object to normalize patterns in.
+ * @param {string} namespacedBasePath The namespaced base path of the directory to which config base path is relative.
+ * @param {PathImpl} path Path-handling implementation.
  * @returns {Object} The normalized config object.
  */
-function normalizeConfigPatterns(config) {
+function normalizeConfigPatterns(config, namespacedBasePath, path) {
 	if (!config) {
 		return config;
 	}
 
 	let needsNormalization = false;
 
-	if (Array.isArray(config.files)) {
+	if (typeof config.basePath === "string") {
+		needsNormalization = true;
+	}
+
+	if (!needsNormalization && Array.isArray(config.files)) {
 		needsNormalization = config.files.some(pattern => {
 			if (Array.isArray(pattern)) {
 				return pattern.some(needsPatternNormalization);
@@ -310,6 +316,14 @@ function normalizeConfigPatterns(config) {
 	}
 
 	const newConfig = { ...config };
+
+	if (typeof config.basePath === "string") {
+		if (path.isAbsolute(config.basePath)) {
+			newConfig.basePath = path.toNamespacedPath(config.basePath);
+		} else {
+			newConfig.basePath = path.join(namespacedBasePath, config.basePath);
+		}
+	}
 
 	if (Array.isArray(newConfig.files)) {
 		newConfig.files = newConfig.files.map(pattern => {
@@ -334,10 +348,18 @@ function normalizeConfigPatterns(config) {
  * @param {Object} context The context object to pass into any function
  *      found.
  * @param {Array<string>} extraConfigTypes The config types to check.
+ * @param {string} namespacedBasePath The namespaced base path of the directory to which config base paths are relative.
+ * @param {PathImpl} path Path-handling implementation.
  * @returns {Promise<Array>} A flattened array containing only config objects.
  * @throws {TypeError} When a config function returns a function.
  */
-async function normalize(items, context, extraConfigTypes) {
+async function normalize(
+	items,
+	context,
+	extraConfigTypes,
+	namespacedBasePath,
+	path,
+) {
 	const allowFunctions = extraConfigTypes.includes("function");
 	const allowArrays = extraConfigTypes.includes("array");
 
@@ -377,7 +399,7 @@ async function normalize(items, context, extraConfigTypes) {
 	const configs = [];
 
 	for await (const config of asyncIterable) {
-		configs.push(normalizeConfigPatterns(config));
+		configs.push(normalizeConfigPatterns(config, namespacedBasePath, path));
 	}
 
 	return configs;
@@ -390,10 +412,18 @@ async function normalize(items, context, extraConfigTypes) {
  * @param {Object} context The context object to pass into any function
  *      found.
  * @param {Array<string>} extraConfigTypes The config types to check.
+ * @param {string} namespacedBasePath The namespaced base path of the directory to which config base paths are relative.
+ * @param {PathImpl} path Path-handling implementation
  * @returns {Array} A flattened array containing only config objects.
  * @throws {TypeError} When a config function returns a function.
  */
-function normalizeSync(items, context, extraConfigTypes) {
+function normalizeSync(
+	items,
+	context,
+	extraConfigTypes,
+	namespacedBasePath,
+	path,
+) {
 	const allowFunctions = extraConfigTypes.includes("function");
 	const allowArrays = extraConfigTypes.includes("array");
 
@@ -431,7 +461,7 @@ function normalizeSync(items, context, extraConfigTypes) {
 	const configs = [];
 
 	for (const config of flatTraverse(items)) {
-		configs.push(normalizeConfigPatterns(config));
+		configs.push(normalizeConfigPatterns(config, namespacedBasePath, path));
 	}
 
 	return configs;
@@ -852,6 +882,8 @@ export class ConfigArray extends Array {
 				this,
 				context,
 				this.extraConfigTypes,
+				this.#namespacedBasePath,
+				this.#path,
 			);
 			this.length = 0;
 			this.push(
@@ -881,6 +913,8 @@ export class ConfigArray extends Array {
 				this,
 				context,
 				this.extraConfigTypes,
+				this.#namespacedBasePath,
+				this.#path,
 			);
 			this.length = 0;
 			this.push(
