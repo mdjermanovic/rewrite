@@ -75,7 +75,7 @@ const CONFIG_TYPES = new Set(["array", "function"]);
  * Fields that are considered metadata and not part of the config object.
  * @type {Set<string>}
  */
-const META_FIELDS = new Set(["name"]);
+const META_FIELDS = new Set(["name", "basePath"]);
 
 /**
  * A schema containing just files and ignores for early validation.
@@ -470,37 +470,43 @@ function normalizeSync(
 /**
  * Determines if a given file path should be ignored based on the given
  * matcher.
- * @param {Array<string|((string) => boolean)>} ignores The ignore patterns to check.
+ * @param {Array<{ basePath?: string, ignores: Array<string|((string) => boolean)>}>} configs Configuration objects containing `ignores`.
  * @param {string} filePath The unprocessed file path to check.
  * @param {string} relativeFilePath The path of the file to check relative to the base path,
  * 		using forward slash (`"/"`) as a separator.
  * @returns {boolean} True if the path should be ignored and false if not.
  */
-function shouldIgnorePath(ignores, filePath, relativeFilePath) {
-	return ignores.reduce((ignored, matcher) => {
-		if (!ignored) {
-			if (typeof matcher === "function") {
-				return matcher(filePath);
+function shouldIgnorePath(configs, filePath, relativeFilePath) {
+	let shouldIgnore = false;
+
+	for (const config of configs) {
+		shouldIgnore = config.ignores.reduce((ignored, matcher) => {
+			if (!ignored) {
+				if (typeof matcher === "function") {
+					return matcher(filePath);
+				}
+
+				// don't check negated patterns because we're not ignored yet
+				if (!matcher.startsWith("!")) {
+					return doMatch(relativeFilePath, matcher);
+				}
+
+				// otherwise we're still not ignored
+				return false;
 			}
 
-			// don't check negated patterns because we're not ignored yet
-			if (!matcher.startsWith("!")) {
-				return doMatch(relativeFilePath, matcher);
+			// only need to check negated patterns because we're ignored
+			if (typeof matcher === "string" && matcher.startsWith("!")) {
+				return !doMatch(relativeFilePath, matcher, {
+					flipNegate: true,
+				});
 			}
 
-			// otherwise we're still not ignored
-			return false;
-		}
+			return ignored;
+		}, shouldIgnore);
+	}
 
-		// only need to check negated patterns because we're ignored
-		if (typeof matcher === "string" && matcher.startsWith("!")) {
-			return !doMatch(relativeFilePath, matcher, {
-				flipNegate: true,
-			});
-		}
-
-		return ignored;
-	}, false);
+	return shouldIgnore;
 }
 
 /**
@@ -516,7 +522,11 @@ function shouldIgnorePath(ignores, filePath, relativeFilePath) {
 function pathMatchesIgnores(filePath, relativeFilePath, config) {
 	return (
 		Object.keys(config).filter(key => !META_FIELDS.has(key)).length > 1 &&
-		!shouldIgnorePath(config.ignores, filePath, relativeFilePath)
+		!shouldIgnorePath(
+			[{ ignores: config.ignores }],
+			filePath,
+			relativeFilePath,
+		)
 	);
 }
 
@@ -561,7 +571,7 @@ function pathMatches(filePath, relativeFilePath, config) {
 	 */
 	if (filePathMatchesPattern && config.ignores) {
 		filePathMatchesPattern = !shouldIgnorePath(
-			config.ignores,
+			[{ ignores: config.ignores }],
 			filePath,
 			relativeFilePath,
 		);
@@ -824,7 +834,7 @@ export class ConfigArray extends Array {
 	 * the matching `files` fields in any configs. This is necessary to mimic
 	 * the behavior of things like .gitignore and .eslintignore, allowing a
 	 * globbing operation to be faster.
-	 * @returns {string[]} An array of string patterns and functions to be ignored.
+	 * @returns {Object[]} An array of config objects representing global ignores.
 	 */
 	get ignores() {
 		assertNormalized(this);
@@ -851,7 +861,7 @@ export class ConfigArray extends Array {
 				Object.keys(config).filter(key => !META_FIELDS.has(key))
 					.length === 1
 			) {
-				result.push(...config.ignores);
+				result.push(config);
 			}
 		}
 

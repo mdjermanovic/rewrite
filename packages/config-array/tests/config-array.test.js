@@ -3490,7 +3490,7 @@ describe("ConfigArray", () => {
 			it("should return all ignores from all configs without files when called", () => {
 				const expectedIgnores = configs.reduce((list, config) => {
 					if (config.ignores && Object.keys(config).length === 1) {
-						list.push(...config.ignores);
+						list.push(config);
 					}
 
 					return list;
@@ -3518,7 +3518,12 @@ describe("ConfigArray", () => {
 					configs.isFileIgnored("ignoreme/foo.js"),
 					true,
 				);
-				assert.deepStrictEqual(configs.ignores, ["ignoreme"]);
+				assert.deepStrictEqual(configs.ignores, [
+					{
+						name: "foo",
+						ignores: ["ignoreme"],
+					},
+				]);
 			});
 		});
 
