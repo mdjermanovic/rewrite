@@ -496,7 +496,7 @@ function shouldIgnorePath(configs, filePath, relativeFilePath, path) {
 
 	for (const config of configs) {
 		const relativeFilePathToCheck = config.basePath
-			? toRelativePath(filePath, config.basePath, path)
+			? `${toRelativePath(filePath, config.basePath, path)}${relativeFilePath.endsWith("/") ? "/" : ""}`
 			: relativeFilePath;
 		shouldIgnore = config.ignores.reduce((ignored, matcher) => {
 			if (!ignored) {
