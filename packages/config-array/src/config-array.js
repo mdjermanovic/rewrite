@@ -1044,6 +1044,13 @@ export class ConfigArray extends Array {
 				? toRelativePath(filePath, config.basePath, this.#path)
 				: relativeToBaseFilePath;
 
+			if (config.basePath && EXTERNAL_PATH_REGEX.test(relativeFilePath)) {
+				debug(
+					`Skipped config found for ${filePath} (based on config's base path: ${config.basePath}`,
+				);
+				return;
+			}
+
 			if (!config.files) {
 				if (!config.ignores) {
 					debug(`Universal config found for ${filePath}`);
