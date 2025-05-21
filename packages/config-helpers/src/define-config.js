@@ -379,6 +379,12 @@ function extendConfig(baseConfig, baseConfigName, extension, extensionName) {
 
 	result.name = `${baseConfigName} > ${extensionName}`;
 
+	// @ts-ignore -- ESLint types aren't updated yet
+	if (baseConfig.basePath) {
+		// @ts-ignore -- ESLint types aren't updated yet
+		result.basePath = baseConfig.basePath;
+	}
+
 	return result;
 }
 
@@ -436,6 +442,10 @@ function processExtends(config, configNames) {
 		objectExtends,
 	)) {
 		const extension = /** @type {Config} */ (extendsElement);
+
+		if ("basePath" in extension) {
+			throw new TypeError("'basePath' in `extends` is not allowed.");
+		}
 
 		if ("extends" in extension) {
 			throw new TypeError("Nested 'extends' is not allowed.");
